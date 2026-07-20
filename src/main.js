@@ -14,7 +14,6 @@ import {
   Animation,
   CubicEase,
   EasingFunction,
-  WebXRFeatureName,
   PointerDragBehavior,
   CubeTexture,
   DynamicTexture,
@@ -43,20 +42,18 @@ const CONFIG = {
   modelPath: "models/",
   distanciaExplosaoPadrao: 0.9,
   multiplicadorPecaPequena: 2.4,
-  // trechos (minúsculos) que identificam ferragem/peças pequenas
-  // pelo NOME JÁ LIMPO (ver limparNomePeca)
   pecasPequenasKeywords: [
     "parafuso", "porca", "arruela", "pino", "anel", "chaveta",
     "retentor", "rolamento", "dobradiça"
   ],
-  correcaoRotacao: { x: Math.PI / 2, y: Math.PI / 2, z: 0 },
+  // Rotação inicial ajustada para o modelo
+  correcaoRotacao: { x: 0, y: Math.PI / 2, z: 0 },
   escala: 10,
   manualPdf: "manual/manual-operador.pdf"
 };
 
 // =========================================================
-// TRADUÇÃO / LIMPEZA DE NOMES (o GLB só tem nome bom no
-// nó de GRUPO, cada peça folha vem genérica como "Sólido1")
+// TRADUÇÃO / LIMPEZA DE NOMES
 // =========================================================
 const TRADUCOES_HARDWARE = [
   [/BS EN ISO 2338.*/i, "Pino Cilíndrico (BS EN ISO 2338)"],
@@ -94,9 +91,7 @@ function limparNomePeca(nomeBruto) {
 }
 
 // =========================================================
-// FICHA TÉCNICA — conteúdo ilustrativo/genérico para fins
-// didáticos. Revisar valores de torque/norma antes de usar
-// como referência técnica formal.
+// FICHA TÉCNICA
 // =========================================================
 const METADADOS_PRINCIPAIS = {
   "BASE DA MOENDA": { funcao: "Estrutura de sustentação de toda a montagem", material: "Ferro fundido / aço estrutural", norma: "Projeto interno", torque: "—", ferramenta: "—", manutencao: "Inspeção visual de trincas e corrosão" },
@@ -152,7 +147,7 @@ function obterMetadados(nomeExibicao) {
 const canvas = document.getElementById("renderCanvas");
 const engine = new Engine(canvas, true, { stencil: true, antialias: true });
 const scene = new Scene(engine);
-scene.clearColor = new Color4(0.031, 0.039, 0.051, 1); // #080a0d — mesma cor do morsaxr
+scene.clearColor = new Color4(0.031, 0.039, 0.051, 1);
 
 const camera = new ArcRotateCamera("camera", -Math.PI / 2.5, Math.PI / 2.5, 3, Vector3.Zero(), scene);
 camera.attachControl(canvas, true);
@@ -211,8 +206,6 @@ function ativarRenderizacaoRealista(ativo) {
   }
 }
 configurarRenderizacaoRealista();
-window.desligarSSAO = () => { if (ssaoPipeline) ssaoPipeline.isEnabled = false; console.log("SSAO desligado."); };
-window.ligarSSAO = () => { if (ssaoPipeline) ssaoPipeline.isEnabled = true; console.log("SSAO ligado."); };
 
 const highlightLayer = new HighlightLayer("hl", scene);
 
@@ -220,20 +213,50 @@ const highlightLayer = new HighlightLayer("hl", scene);
 // ESTADO GLOBAL
 // =========================================================
 let containerMaquina = null;
-let gruposMontagem = []; // [{node, nomeOriginal, nomeExibicao, meshes, posicaoOriginal, direcao, distancia}]
+let gruposMontagem = []; 
 let grupoSelecionado = null;
 let fatorExplosaoAtual = 0;
-let modoAtual = "livre"; // livre | guiado | explodido
+let modoAtual = "livre"; 
 let passoGuiadoAtual = 0;
 let dragBehaviors = [];
 let xrHelper = null;
 let chao = null;
 
 // =========================================================
-// ACABAMENTO ESPELHADO — metálico alto / rugosidade baixa,
-// no mesmo espírito visual do SimMorsa XR (morsaxr).
-// Mantém a cor base (albedo) intacta, só mexe em
-// metallic/roughness — é isso que dá o brilho de espelho.
+// FUNÇÃO GLOBAL DE AJUSTE DE ROTAÇÃO (Console)
+// =========================================================
+window.ajustarRotacaoGraus = (xg = 0, yg = 0, zg = 0) => {
+  if (!containerMaquina) {
+    console.warn("Aguarde o modelo carregar antes de ajustar a rotação.");
+    return;
+  }
+
+  const todasPartes = gruposMontagem.flatMap((g) => g.meshes);
+
+  containerMaquina.rotation.set(
+    (xg * Math.PI) / 180,
+    (yg * Math.PI) / 180,
+    (zg * Math.PI) / 180
+  );
+
+  containerMaquina.computeWorldMatrix(true);
+  todasPartes.forEach((p) => p.computeWorldMatrix(true));
+
+  const novaBbox = calcularBoundingBoxMeshes(todasPartes);
+  containerMaquina.position.y -= novaBbox.min.y;
+
+  containerMaquina.computeWorldMatrix(true);
+  todasPartes.forEach((p) => p.computeWorldMatrix(true));
+
+  const bboxFinal = calcularBoundingBoxMeshes(todasPartes);
+  enquadrarCamera(bboxFinal);
+  prepararExplosao(bboxFinal);
+
+  console.log(`Rotação ajustada: X=${xg}° | Y=${yg}° | Z=${zg}°`);
+};
+
+// =========================================================
+// MATERIAIS / ILUMINAÇÃO
 // =========================================================
 function aplicarAcabamentoEspelhado(grupos) {
   const processados = new Set();
@@ -252,7 +275,6 @@ function aplicarAcabamentoEspelhado(grupos) {
       }
     });
   });
-  console.log(`Acabamento espelhado aplicado em ${processados.size} materiais.`);
 
   window.ajustarAcabamento = (metallic = 1.0, roughness = 0.05) => {
     processados.clear();
@@ -269,10 +291,6 @@ function aplicarAcabamentoEspelhado(grupos) {
     });
     console.log(`Acabamento ajustado: metallic=${metallic} roughness=${roughness}`);
   };
-  console.log(
-    "%cDica: ajustarAcabamento(metallic, roughness) no console pra afinar o brilho — ex: ajustarAcabamento(0.8, 0.2) pra menos espelhado.",
-    "color:#4fd1c5"
-  );
 }
 
 function calcularBoundingBoxMeshes(meshes) {
@@ -322,9 +340,10 @@ async function carregarModelo() {
 
     containerMaquina.rotation.set(CONFIG.correcaoRotacao.x, CONFIG.correcaoRotacao.y, CONFIG.correcaoRotacao.z);
     containerMaquina.scaling.set(CONFIG.escala, CONFIG.escala, CONFIG.escala);
+    
     containerMaquina.computeWorldMatrix(true);
+    result.meshes.forEach((m) => m.computeWorldMatrix(true));
 
-    // agrupa por nó de nível superior da montagem (filhos diretos do root importado)
     const raizImportada = result.meshes[0];
     gruposMontagem = raizImportada.getChildren(undefined, true)
       .map((node) => {
@@ -345,14 +364,14 @@ async function carregarModelo() {
       mesh.receiveShadows = true;
     });
 
-    // assenta a base no piso (y = 0)
+    // Assentamento preciso no piso (Y = 0)
     let bbox = calcularBoundingBoxMeshes(todasPartes);
     containerMaquina.position.y -= bbox.min.y;
+    
     containerMaquina.computeWorldMatrix(true);
     todasPartes.forEach((p) => p.computeWorldMatrix(true));
-
     bbox = calcularBoundingBoxMeshes(todasPartes);
-    //construirCenario(bbox);
+
     enquadrarCamera(bbox);
     aplicarAcabamentoEspelhado(gruposMontagem);
 
@@ -363,20 +382,8 @@ async function carregarModelo() {
 
     liberarBotaoIniciar();
     console.log(`Modelo carregado: ${gruposMontagem.length} grupos de montagem.`);
+    console.log("%cDica: Digite ajustarRotacaoGraus(x, y, z) no console para reorientar.", "color:#4fd1c5");
 
-    // atalhos de debug pra ajustar rotação ao vivo sem rebuild
-    window.containerMaquina = containerMaquina;
-    window.ajustarRotacaoGraus = (xg = 0, yg = 0, zg = 0) => {
-      containerMaquina.rotation.set((xg * Math.PI) / 180, (yg * Math.PI) / 180, (zg * Math.PI) / 180);
-      containerMaquina.computeWorldMatrix(true);
-      todasPartes.forEach((p) => p.computeWorldMatrix(true));
-      const nova = calcularBoundingBoxMeshes(todasPartes);
-      containerMaquina.position.y -= nova.min.y;
-      containerMaquina.computeWorldMatrix(true);
-      enquadrarCamera(calcularBoundingBoxMeshes(todasPartes));
-      console.log(`Rotação: x=${xg}° y=${yg}° z=${zg}°`);
-    };
-    console.log("%cDica: ajustarRotacaoGraus(x,y,z) no console pra recalibrar a orientação sem rebuild.", "color:#4fd1c5");
   } catch (err) {
     console.error("Erro ao carregar modelo:", err);
     splashProgressLabel.textContent = "Erro ao carregar modelo.";
@@ -390,138 +397,7 @@ function enquadrarCamera(bbox) {
 }
 
 // =========================================================
-// CENÁRIO — piso/paredes/sinalização, tom escuro (morsaxr)
-// =========================================================
-function criarTexturaPisoEpoxi(repeticoes) {
-  const tex = new DynamicTexture("texPiso", { width: 512, height: 512 }, scene, true);
-  const ctx = tex.getContext();
-  ctx.fillStyle = "#1a1d24";
-  ctx.fillRect(0, 0, 512, 512);
-  ctx.strokeStyle = "rgba(255,255,255,0.06)";
-  ctx.lineWidth = 2;
-  for (let i = 0; i <= 512; i += 64) {
-    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
-  }
-  tex.update();
-  tex.wrapU = Texture.WRAP_ADDRESSMODE;
-  tex.wrapV = Texture.WRAP_ADDRESSMODE;
-  tex.uScale = repeticoes;
-  tex.vScale = repeticoes;
-  return tex;
-}
-
-function criarTexturaParede() {
-  const tex = new DynamicTexture("texParede", { width: 512, height: 512 }, scene, true);
-  const ctx = tex.getContext();
-  ctx.fillStyle = "#12151b";
-  ctx.fillRect(0, 0, 512, 512);
-  ctx.strokeStyle = "rgba(255,255,255,0.05)";
-  ctx.lineWidth = 3;
-  for (let i = 0; i <= 512; i += 128) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke(); }
-  ctx.fillStyle = "#0c0e13";
-  ctx.fillRect(0, 460, 512, 52);
-  tex.update();
-  tex.wrapU = Texture.WRAP_ADDRESSMODE;
-  tex.wrapV = Texture.WRAP_ADDRESSMODE;
-  return tex;
-}
-
-function criarPainelSenai(largura, altura) {
-  const tex = new DynamicTexture("texSenai", { width: 1024, height: 320 }, scene, true);
-  const ctx = tex.getContext();
-  ctx.fillStyle = "#0b3a70"; ctx.fillRect(0, 0, 1024, 320);
-  ctx.fillStyle = "#e21f26"; ctx.fillRect(0, 0, 14, 320); ctx.fillRect(1010, 0, 14, 320);
-  ctx.fillStyle = "#ffffff"; ctx.textAlign = "center";
-  ctx.font = "bold 72px Arial"; ctx.fillText("SENAI", 512, 130);
-  ctx.font = "30px Arial"; ctx.fillText("CFP Antonio Adolphe Lobbe — São Carlos/SP", 512, 190);
-  ctx.font = "24px Arial"; ctx.fillStyle = "#cfe0f5";
-  ctx.fillText("Moenda XR — Simulação RV/RA", 512, 235);
-  tex.update();
-  const mat = new StandardMaterial("matSenai", scene);
-  mat.diffuseTexture = tex;
-  mat.emissiveTexture = tex;
-  mat.emissiveColor = new Color3(1, 1, 1);
-  mat.specularColor = Color3.Black();
-  const plane = MeshBuilder.CreatePlane("painelSenai", { width: largura, height: altura }, scene);
-  plane.material = mat;
-  return plane;
-}
-
-function criarLuzesTeto(y, largura, quantidade) {
-  const mat = new StandardMaterial("matLuzTeto", scene);
-  mat.emissiveColor = new Color3(0.6, 0.75, 0.75);
-  mat.diffuseColor = Color3.Black();
-  const espaco = largura / quantidade;
-  for (let i = 0; i < quantidade; i++) {
-    const luz = MeshBuilder.CreateBox(`luzTeto${i}`, { width: espaco * 0.6, height: 0.05, depth: 0.6 }, scene);
-    luz.material = mat;
-    luz.position = new Vector3((i - (quantidade - 1) / 2) * espaco, y, 0);
-  }
-}
-
-function construirCenario(bbox) {
-  const tamanhoMaquina = Math.max(bbox.tamanho.x, bbox.tamanho.z);
-  const alturaMaquina = bbox.tamanho.y;
-  const tamanhoPiso = Math.max(tamanhoMaquina * 5, 8);
-  const alturaParede = Math.max(alturaMaquina * 2.5, 3);
-  const centro = new Vector3(bbox.centro.x, 0, bbox.centro.z);
-
-  chao = MeshBuilder.CreateGround("chao", { width: tamanhoPiso, height: tamanhoPiso }, scene);
-  chao.position.copyFrom(centro);
-  const matPiso = new StandardMaterial("matPiso", scene);
-  matPiso.diffuseTexture = criarTexturaPisoEpoxi(tamanhoPiso / 1.8);
-  matPiso.specularColor = new Color3(0.08, 0.08, 0.08);
-  chao.material = matPiso;
-  chao.receiveShadows = true;
-
-  const matFaixa = new StandardMaterial("matFaixa", scene);
-  matFaixa.emissiveColor = new Color3(0.9, 0.7, 0.05);
-  const barra = (w, d, x, z) => {
-    const b = MeshBuilder.CreateBox("faixa", { width: w, height: 0.01, depth: d }, scene);
-    b.material = matFaixa;
-    b.position.set(x, 0.01, z);
-  };
-  const lm = bbox.tamanho.x + tamanhoMaquina * 0.7;
-  const pm = bbox.tamanho.z + tamanhoMaquina * 0.7;
-  barra(lm, 0.05, centro.x, centro.z - pm / 2);
-  barra(lm, 0.05, centro.x, centro.z + pm / 2);
-  barra(0.05, pm, centro.x - lm / 2, centro.z);
-  barra(0.05, pm, centro.x + lm / 2, centro.z);
-
-  const texParede = criarTexturaParede();
-  const matParede = new StandardMaterial("matParede", scene);
-  matParede.diffuseTexture = texParede;
-  matParede.specularColor = Color3.Black();
-  const distParede = tamanhoPiso / 2;
-
-  const paredeFundo = MeshBuilder.CreatePlane("paredeFundo", { width: tamanhoPiso, height: alturaParede }, scene);
-  paredeFundo.material = matParede;
-  paredeFundo.position.set(centro.x, alturaParede / 2, centro.z - distParede);
-  paredeFundo.receiveShadows = true;
-
-  const paredeEsquerda = MeshBuilder.CreatePlane("paredeEsquerda", { width: tamanhoPiso, height: alturaParede }, scene);
-  paredeEsquerda.material = matParede;
-  paredeEsquerda.rotation.y = Math.PI / 2;
-  paredeEsquerda.position.set(centro.x - distParede, alturaParede / 2, centro.z);
-  paredeEsquerda.receiveShadows = true;
-
-  const paredeDireita = MeshBuilder.CreatePlane("paredeDireita", { width: tamanhoPiso, height: alturaParede }, scene);
-  paredeDireita.material = matParede;
-  paredeDireita.rotation.y = -Math.PI / 2;
-  paredeDireita.position.set(centro.x + distParede, alturaParede / 2, centro.z);
-  paredeDireita.receiveShadows = true;
-
-  const painel = criarPainelSenai(tamanhoMaquina * 1.8, tamanhoMaquina * 0.55);
-  painel.position.set(centro.x, alturaParede * 0.75, centro.z - distParede + 0.02);
-
-  criarLuzesTeto(alturaParede * 0.96, tamanhoPiso * 0.7, 5);
-
-  criarPainelControleXR(bbox, tamanhoMaquina);
-}
-
-// =========================================================
-// EXPLOSÃO — por GRUPO (rígido), não por malha individual
+// EXPLOSÃO
 // =========================================================
 function prepararExplosao(bboxGeral) {
   const centroGeral = bboxGeral.centro;
@@ -569,7 +445,7 @@ function animarExplosaoPara(fatorAlvo, duracaoFrames = 30) {
 }
 
 // =========================================================
-// MODO LIVRE — arrasta o GRUPO inteiro (rígido)
+// MODO LIVRE
 // =========================================================
 function prepararModoLivre() {
   gruposMontagem.forEach((grupo) => {
@@ -590,7 +466,7 @@ function setDragEnabled(ativo) {
 }
 
 // =========================================================
-// SELEÇÃO POR CLIQUE + FICHA TÉCNICA
+// SELEÇÃO / PAINEL
 // =========================================================
 const painelPecasLista = document.getElementById("pecas-lista");
 const painelPecasContador = document.getElementById("pecas-contador");
@@ -658,7 +534,7 @@ function prepararSelecaoPorClique() {
 }
 
 // =========================================================
-// TROCA DE MODO
+// MODO DE INTERAÇÃO
 // =========================================================
 function setModo(modo) {
   modoAtual = modo;
@@ -711,7 +587,6 @@ document.getElementById("btn-prev-step").addEventListener("click", () => irParaP
 document.getElementById("btn-next-step").addEventListener("click", () => irParaPassoGuiado(passoGuiadoAtual + 1));
 document.getElementById("explode-slider").addEventListener("input", (e) => aplicarExplosao(Number(e.target.value) / 100));
 
-// atalhos de teclado (E explode, R reset)
 document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
   if (e.key.toLowerCase() === "e") {
@@ -724,102 +599,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 // =========================================================
-// PAINEL DE CONTROLE 3D (dentro do headset)
-// =========================================================
-function criarPainelControleXR(bbox, tamanhoMaquina) {
-  const largura = Math.max(tamanhoMaquina * 0.6, 0.6);
-  const altura = largura * 0.75;
-
-  const placaBase = MeshBuilder.CreatePlane("painelControleXR", { width: largura, height: altura }, scene);
-  placaBase.position = new Vector3(bbox.min.x - tamanhoMaquina * 0.2, bbox.min.y + tamanhoMaquina * 0.35, bbox.centro.z);
-  placaBase.rotation.y = Math.PI / 2;
-
-  const adt = AdvancedDynamicTexture.CreateForMesh(placaBase, 512, 384, false);
-  const fundo = new Rectangle("fundoPainel");
-  fundo.background = "#0a0d12ee";
-  fundo.thickness = 2;
-  fundo.color = "#4fd1c5";
-  fundo.cornerRadius = 16;
-  adt.addControl(fundo);
-
-  const pilha = new StackPanel("pilhaPainel");
-  pilha.width = 0.92;
-  pilha.paddingTop = "16px";
-  fundo.addControl(pilha);
-
-  const titulo = new TextBlock("tituloPainel", "MOENDA — Controle");
-  titulo.height = "36px";
-  titulo.color = "#e8ecf1";
-  titulo.fontSize = 26;
-  titulo.fontWeight = "bold";
-  pilha.addControl(titulo);
-
-  function criarBotaoXR(texto, largura, aoClicar) {
-    const btn = Button.CreateSimpleButton(`btnXR_${texto}`, texto);
-    btn.width = largura;
-    btn.height = "50px";
-    btn.color = "#e8ecf1";
-    btn.fontSize = 20;
-    btn.background = "#1c2028";
-    btn.cornerRadius = 10;
-    btn.thickness = 0;
-    btn.onPointerUpObservable.add(aoClicar);
-    return btn;
-  }
-
-  const linha1 = new StackPanel("linha1");
-  linha1.isVertical = false;
-  linha1.height = "60px";
-  linha1.paddingTop = "12px";
-  pilha.addControl(linha1);
-  const btnLivreXR = criarBotaoXR("Livre", "140px", () => { setModo("livre"); atualizarBotoesXR(); });
-  const btnExplodidoXR = criarBotaoXR("Explodir", "190px", () => { setModo("explodido"); atualizarBotoesXR(); });
-  linha1.addControl(btnLivreXR);
-  linha1.addControl(btnExplodidoXR);
-
-  function atualizarBotoesXR() {
-    btnLivreXR.background = modoAtual === "livre" ? "#4fd1c5" : "#1c2028";
-    btnExplodidoXR.background = modoAtual === "explodido" ? "#4fd1c5" : "#1c2028";
-  }
-  atualizarBotoesXR();
-
-  const rotuloSlider = new TextBlock("rotuloSlider", "Fator de explosão");
-  rotuloSlider.height = "26px";
-  rotuloSlider.color = "#8792a3";
-  rotuloSlider.fontSize = 16;
-  rotuloSlider.paddingTop = "8px";
-  pilha.addControl(rotuloSlider);
-
-  const sliderXR = new Slider("sliderXR");
-  sliderXR.minimum = 0;
-  sliderXR.maximum = 100;
-  sliderXR.value = 0;
-  sliderXR.height = "32px";
-  sliderXR.width = "88%";
-  sliderXR.color = "#4fd1c5";
-  sliderXR.background = "#1c2028";
-  sliderXR.onValueChangedObservable.add((valor) => {
-    if (modoAtual !== "explodido") return;
-    aplicarExplosao(valor / 100);
-    document.getElementById("explode-slider").value = valor;
-  });
-  pilha.addControl(sliderXR);
-
-  const linha2 = new StackPanel("linha2");
-  linha2.isVertical = false;
-  linha2.height = "56px";
-  linha2.paddingTop = "10px";
-  pilha.addControl(linha2);
-  linha2.addControl(criarBotaoXR("Sair", "150px", () => { if (xrHelper) xrHelper.baseExperience.exitXRAsync(); }));
-  linha2.addControl(criarBotaoXR("📄 Manual", "160px", () => {
-    if (xrHelper) xrHelper.baseExperience.exitXRAsync().then(() => abrirManual());
-  }));
-
-  return placaBase;
-}
-
-// =========================================================
-// WEBXR — VR e RA
+// WEBXR
 // =========================================================
 const btnVR = document.getElementById("btn-vr");
 const btnAR = document.getElementById("btn-ar");
@@ -862,10 +642,12 @@ async function configurarXR() {
     xrStatus.textContent = "WebXR indisponível neste navegador";
   }
 }
+
 async function verificarSuporteXR(modo) {
   if (!navigator.xr || !navigator.xr.isSessionSupported) return false;
   try { return await navigator.xr.isSessionSupported(modo); } catch { return false; }
 }
+
 async function entrarXR(modo) {
   if (!xrHelper) return;
   try {
@@ -875,11 +657,12 @@ async function entrarXR(modo) {
     xrStatus.textContent = `Não foi possível iniciar ${modo === "immersive-ar" ? "RA" : "RV"}`;
   }
 }
+
 btnVR.addEventListener("click", () => entrarXR("immersive-vr"));
 btnAR.addEventListener("click", () => entrarXR("immersive-ar"));
 
 // =========================================================
-// MANUAL DO OPERADOR
+// MANUAL
 // =========================================================
 const btnManual = document.getElementById("btn-manual");
 const btnFecharManual = document.getElementById("btn-fechar-manual");
@@ -907,12 +690,9 @@ function fecharManual() {
 btnManual.addEventListener("click", abrirManual);
 btnFecharManual.addEventListener("click", fecharManual);
 manualOverlay.addEventListener("click", (e) => { if (e.target === manualOverlay) fecharManual(); });
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !manualOverlay.classList.contains("hidden")) fecharManual();
-});
 
 // =========================================================
-// LOOP PRINCIPAL
+// EXECUÇÃO INICIAL
 // =========================================================
 carregarModelo().then(() => configurarXR());
 engine.runRenderLoop(() => scene.render());
