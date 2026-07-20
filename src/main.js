@@ -40,8 +40,8 @@ import {
 const CONFIG = {
   modelFile: "moenda.glb",
   modelPath: "models/",
-  distanciaExplosaoPadrao: 0.9,
-  multiplicadorPecaPequena: 2.4,
+  distanciaExplosaoPadrao: 0.1,
+  multiplicadorPecaPequena: 1.4,
   pecasPequenasKeywords: [
     "parafuso", "porca", "arruela", "pino", "anel", "chaveta",
     "retentor", "rolamento", "dobradiça"
