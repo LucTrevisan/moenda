@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#080a0d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Moenda XR — SENAI Mecatrônica</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <canvas id="renderCanvas"></canvas>
+
+  <!-- ============================================= -->
+  <!-- TELA DE SPLASH -->
+  <!-- ============================================= -->
+  <div id="splash">
+    <div id="splash-card">
+      <div id="splash-stripe-left"></div>
+      <div id="splash-stripe-right"></div>
+
+      <div id="splash-brand">Moenda XR</div>
+      <div id="splash-school">SENAI Mecatrônica · Simulador de Montagem</div>
+
+      <div id="splash-divider"></div>
+
+      <div id="splash-course">Técnico em Mecatrônica</div>
+      <div id="splash-project">CFP Antonio Adolphe Lobbe — São Carlos/SP</div>
+
+      <div id="splash-progress-wrap">
+        <div id="splash-progress-bar"></div>
+      </div>
+      <div id="splash-progress-label">Iniciando…</div>
+
+      <button id="btn-iniciar" disabled>Iniciar Simulação</button>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- HUD PRINCIPAL (esquerda) -->
+  <!-- ============================================= -->
+  <div id="hud">
+    <div id="hud-title">MOENDA XR</div>
+    <div id="hud-subtitle">Modelo: moenda.glb · Engine: Babylon.js 7</div>
+
+    <div id="mode-buttons">
+      <button id="btn-livre" class="mode-btn active">🔍 Livre</button>
+      <button id="btn-guiado" class="mode-btn">📋 Guiado</button>
+      <button id="btn-explodido" class="mode-btn">💥 Explodido</button>
+    </div>
+    <button id="btn-reset" class="reset-btn">↺ Reset</button>
+
+    <div id="explode-panel">
+      <label for="explode-slider">Fator de explosão</label>
+      <input type="range" id="explode-slider" min="0" max="100" value="0" />
+    </div>
+
+    <div id="guided-panel">
+      <div id="guided-step-label">Passo 1</div>
+      <div id="guided-buttons">
+        <button id="btn-prev-step">◀ Anterior</button>
+        <button id="btn-next-step">Próximo ▶</button>
+      </div>
+    </div>
+
+    <div id="xr-panel">
+      <label>Realidade estendida</label>
+      <div id="xr-buttons">
+        <button id="btn-vr" class="xr-btn">⬡ Entrar em RV</button>
+        <button id="btn-ar" class="xr-btn">⬡ Entrar em RA</button>
+      </div>
+      <div id="xr-status"></div>
+    </div>
+
+    <div id="doc-panel">
+      <label>Documentação</label>
+      <button id="btn-manual" class="doc-btn">📄 Manual do Operador</button>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- PAINEL DE PEÇAS IDENTIFICADAS (direita) -->
+  <!-- ============================================= -->
+  <div id="pecas-panel">
+    <div id="pecas-header">
+      <span>Peças Identificadas</span>
+      <span id="pecas-contador">0 / 0 componentes</span>
+    </div>
+    <div id="pecas-lista"></div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- FICHA TÉCNICA DA PEÇA SELECIONADA -->
+  <!-- ============================================= -->
+  <div id="ficha-tecnica" class="hidden">
+    <div id="ficha-header">
+      <span id="ficha-nome">—</span>
+      <button id="btn-fechar-ficha" aria-label="Fechar">✕</button>
+    </div>
+    <div id="ficha-corpo">
+      <div class="ficha-linha"><span class="ficha-rotulo">Função</span><span id="ficha-funcao">—</span></div>
+      <div class="ficha-linha"><span class="ficha-rotulo">Material</span><span id="ficha-material">—</span></div>
+      <div class="ficha-linha"><span class="ficha-rotulo">Norma</span><span id="ficha-norma">—</span></div>
+      <div class="ficha-linha"><span class="ficha-rotulo">Torque</span><span id="ficha-torque">—</span></div>
+      <div class="ficha-linha"><span class="ficha-rotulo">Ferramenta</span><span id="ficha-ferramenta">—</span></div>
+      <div class="ficha-linha"><span class="ficha-rotulo">Manutenção</span><span id="ficha-manutencao">—</span></div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- DICAS DE ATALHOS (rodapé) -->
+  <!-- ============================================= -->
+  <div id="atalhos">
+    <span><kbd>Click</kbd> selecionar</span>
+    <span><kbd>Drag</kbd> girar</span>
+    <span><kbd>Scroll</kbd> zoom</span>
+    <span><kbd>E</kbd> explodir</span>
+    <span><kbd>R</kbd> reset</span>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- PAINEL DO MANUAL (PDF sobreposto) -->
+  <!-- ============================================= -->
+  <div id="manual-overlay" class="hidden">
+    <div id="manual-panel">
+      <div id="manual-header">
+        <span>Manual do Operador — Moenda</span>
+        <button id="btn-fechar-manual" aria-label="Fechar">✕</button>
+      </div>
+      <div id="manual-body">
+        <iframe id="manual-iframe" title="Manual do Operador"></iframe>
+        <div id="manual-erro" class="hidden">
+          PDF não encontrado. Coloque o arquivo em
+          <code>public/manual/manual-operador.pdf</code> e recarregue a página.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

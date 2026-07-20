@@ -1,0 +1,2 @@
+Coloque aqui o PDF do manual do operador da moenda, com o nome:
+manual-operador.pdf
