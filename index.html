@@ -14,6 +14,13 @@
   <canvas id="renderCanvas"></canvas>
 
   <!-- ============================================= -->
+  <!-- BOTÃO FLUTUANTE PARA ALTERNAR O MENU -->
+  <!-- ============================================= -->
+  <button id="btn-toggle-menu" class="btn-menu-toggle" aria-label="Alternar Menu" title="Alternar Menu (Atalho: M)">
+    ☰
+  </button>
+
+  <!-- ============================================= -->
   <!-- TELA DE SPLASH -->
   <!-- ============================================= -->
   <div id="splash">
@@ -27,7 +34,7 @@
       <div id="splash-divider"></div>
 
       <div id="splash-course">Técnico em Mecatrônica</div>
-      <div id="splash-project">CFP Antonio Adolphe Lobbe — São Carlos/SP</div>
+      <div id="splash-project">CFP Antonio Adolpho Lobbe — São Carlos/SP</div>
 
       <div id="splash-progress-wrap">
         <div id="splash-progress-bar"></div>
@@ -39,11 +46,16 @@
   </div>
 
   <!-- ============================================= -->
-  <!-- HUD PRINCIPAL (esquerda) -->
+  <!-- HUD PRINCIPAL / MENU LATERAL (esquerda) -->
   <!-- ============================================= -->
-  <div id="hud">
-    <div id="hud-title">MOENDA XR</div>
-    <div id="hud-subtitle">Modelo: moenda.glb · Engine: Babylon.js 7</div>
+  <div id="hud" class="side-menu">
+    <div id="hud-header">
+      <div>
+        <div id="hud-title">MOENDA XR</div>
+        <div id="hud-subtitle">Modelo: moenda.glb · Engine: Babylon.js 7</div>
+      </div>
+      <button id="btn-close-menu" class="btn-close" aria-label="Fechar Menu">✕</button>
+    </div>
 
     <div id="mode-buttons">
       <button id="btn-livre" class="mode-btn active">🔍 Livre</button>
@@ -76,7 +88,7 @@
 
     <div id="doc-panel">
       <label>Documentação</label>
-      <button id="btn-manual" class="doc-btn">📄 Manual do Operador</button>
+      <button id="btn-manual" class="doc-btn">Desenho Montagem</button>
     </div>
   </div>
 
@@ -90,6 +102,23 @@
     </div>
     <div id="pecas-lista"></div>
   </div>
+
+  <!-- Botão flutuante para reabrir o painel de peças (Canto superior direito) -->
+<button id="btn-toggle-pecas" class="btn-pecas-toggle" aria-label="Alternar Painel de Peças" title="Alternar Peças (Atalho: P)">
+  📋
+</button>
+
+<!-- PAINEL DE PEÇAS IDENTIFICADAS (direita) -->
+<div id="pecas-panel">
+    <div id="pecas-header">
+    <div>
+      <span>Peças Identificadas</span>
+      <span id="pecas-contador">0 / 0 componentes</span>
+    </div>
+    <button id="btn-close-pecas" class="btn-close" aria-label="Fechar Painel de Peças">✕</button>
+  </div>
+  <div id="pecas-lista"></div>
+</div>
 
   <!-- ============================================= -->
   <!-- FICHA TÉCNICA DA PEÇA SELECIONADA -->
@@ -117,6 +146,7 @@
     <span><kbd>Drag</kbd> girar</span>
     <span><kbd>Scroll</kbd> zoom</span>
     <span><kbd>E</kbd> explodir</span>
+    <span><kbd>M</kbd> menu</span>
     <span><kbd>R</kbd> reset</span>
   </div>
 
@@ -126,7 +156,7 @@
   <div id="manual-overlay" class="hidden">
     <div id="manual-panel">
       <div id="manual-header">
-        <span>Manual do Operador — Moenda</span>
+        <span>Montagem — Moenda</span>
         <button id="btn-fechar-manual" aria-label="Fechar">✕</button>
       </div>
       <div id="manual-body">
