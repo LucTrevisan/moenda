@@ -172,6 +172,16 @@ html, body {
   pointer-events: none;
 }
 
+/* Garante que o splash cubra totalmente a tela e os botões */
+#splash {
+  z-index: 1000;
+}
+
+/* Classe utilitária para ocultar elementos */
+.hidden {
+  display: none !important;
+}
+
 /* Ajuste no cabeçalho de peças para alinhar o X */
 #pecas-header {
   display: flex;
