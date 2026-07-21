@@ -697,3 +697,85 @@ manualOverlay.addEventListener("click", (e) => { if (e.target === manualOverlay)
 carregarModelo().then(() => configurarXR());
 engine.runRenderLoop(() => scene.render());
 window.addEventListener("resize", () => engine.resize());
+
+// =========================================================
+// CONTROLE DE VISIBILIDADE DO MENU (TOGGLE)
+// =========================================================
+const hudMenu = document.getElementById("hud");
+const btnToggleMenu = document.getElementById("btn-toggle-menu");
+const btnCloseMenu = document.getElementById("btn-close-menu");
+
+function alternarMenu() {
+  if (hudMenu) {
+    hudMenu.classList.toggle("collapsed");
+  }
+}
+
+// Vincula os cliques dos botões
+if (btnToggleMenu) {
+  btnToggleMenu.addEventListener("click", (e) => {
+    e.stopPropagation(); // Impede o clique de passar para o Canvas do Babylon.js
+    alternarMenu();
+  });
+}
+
+if (btnCloseMenu) {
+  btnCloseMenu.addEventListener("click", (e) => {
+    e.stopPropagation();
+    alternarMenu();
+  });
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+
+  if (e.key.toLowerCase() === "m") {
+    // Se pelo menos um estiver visível, recolhe ambos. Senão, mostra ambos.
+    const algumVisivel = !hudMenu?.classList.contains("collapsed") || !pecasPanel?.classList.contains("collapsed");
+
+    if (algumVisivel) {
+      hudMenu?.classList.add("collapsed");
+      pecasPanel?.classList.add("collapsed");
+    } else {
+      hudMenu?.classList.remove("collapsed");
+      pecasPanel?.classList.remove("collapsed");
+    }
+  } 
+
+
+});
+
+// =========================================================
+// CONTROLE DO PAINEL DE PEÇAS (DIREITA)
+// =========================================================
+const pecasPanel = document.getElementById("pecas-panel");
+const btnTogglePecas = document.getElementById("btn-toggle-pecas");
+const btnClosePecas = document.getElementById("btn-close-pecas");
+
+function alternarPainelPecas() {
+  if (pecasPanel) {
+    pecasPanel.classList.toggle("collapsed");
+  }
+}
+
+if (btnTogglePecas) {
+  btnTogglePecas.addEventListener("click", (e) => {
+    e.stopPropagation();
+    alternarPainelPecas();
+  });
+}
+
+if (btnClosePecas) {
+  btnClosePecas.addEventListener("click", (e) => {
+    e.stopPropagation();
+    alternarPainelPecas();
+  });
+}
+
+// Atalho de teclado opcional (tecla 'P') para ocultar/exibir
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.key.toLowerCase() === "p") {
+    alternarPainelPecas();
+  }
+});
